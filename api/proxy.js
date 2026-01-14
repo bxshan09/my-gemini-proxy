@@ -1,44 +1,35 @@
 // api/proxy.js
-// 这个函数默认运行在美国华盛顿 (iad1)
+// ❌ 不要用 export const config = { runtime: 'edge' };
+// ✅ 使用默认的 Node.js 运行时，配合 vercel.json 锁定美国区域
 
-export const config = {
-  runtime: 'edge', // 尝试使用 Edge，但在配置里强制区域
-  regions: ['iad1'], // 强制只在美国东部运行
-};
+export default async function handler(req, res) {
+  // 1. 获取 URL 参数
+  const { path, key } = req.query;
 
-export default async function handler(req) {
-  const url = new URL(req.url);
-  
-  // 1. 提取目标路径 (把 /api/proxy 去掉，保留后面的)
-  // 例如: https://你的vercel.app/api/proxy?path=v1beta/...
-  const targetPath = url.searchParams.get('path');
-  const targetKey = url.searchParams.get('key');
-
-  if (!targetPath || !targetKey) {
-    return new Response("Missing path or key parameters", { status: 400 });
+  if (!path || !key) {
+    return res.status(400).json({ error: "Missing path or key parameters" });
   }
 
-  // 2. 构造 Google 的真实 URL
-  // 最终变成: https://generativelanguage.googleapis.com/v1beta/models/...?key=...
-  const googleUrl = `https://generativelanguage.googleapis.com/${targetPath}?key=${targetKey}`;
-
-  // 3. 转发请求 (强制从美国发出)
-  const modifiedRequest = new Request(googleUrl, {
-    method: req.method,
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: req.body,
-  });
+  // 2. 构造 Google 的 API 地址
+  const googleUrl = `https://generativelanguage.googleapis.com/${path}?key=${key}`;
 
   try {
-    const response = await fetch(modifiedRequest);
-    const data = await response.json();
-    return new Response(JSON.stringify(data), {
-      status: response.status,
-      headers: { 'Content-Type': 'application/json' },
+    // 3. 转发请求 (Node.js 环境下 fetch 是内置的)
+    // 注意：req.body 在 Vercel 函数中已经被解析为对象了，所以需要再次 stringify
+    const response = await fetch(googleUrl, {
+      method: req.method,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(req.body) 
     });
+
+    const data = await response.json();
+
+    // 4. 返回结果
+    return res.status(response.status).json(data);
+
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+    return res.status(500).json({ error: error.message });
   }
 }

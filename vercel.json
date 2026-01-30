@@ -2,7 +2,7 @@
   "regions": ["iad1", "sfo1", "cle1", "pdx1"],
   "functions": {
     "api/proxy.js": {
-      "maxDuration": 10
+      "maxDuration": 60
     }
   }
 }
